@@ -13,10 +13,14 @@
   Splunk Server - Security Information and Event Management tool  
   Wazuh Server - Endpoint detection and response solution  
   Shuffle - Security Orchestration, Automation, and Response tool  
-  Thehive - Case Management tool  
+  jira - Case Management tool  
   MISP - Malware Information Sharing Platform  
   Slack - Notifications
 ```
+
+## network map
+
+![Network diagram example](https://github.com/user-attachments/assets/3527821c-9026-4b7f-a4d2-7839e8e71f26)
 
 ## Machines in the home lab
   ### FreeBSD
@@ -86,22 +90,94 @@
   Splunk Server: splunk.local OR 192.168.99.2
   WAZUH Server: wazuh.local OR 192.168.99.3
 ```
-## Installation process
+## Installation and Integration process
 
 1. Installation of pfsense
+```
+Download .ISO file from https://www.pfsense.org/download/.
+added as disk image as installation disk.
+configured network interface as WAN & LAN network during installation process.
+configured DHCP with interface specific IP range, static IPs.
+configured DNS service.
+harden basic security through interface specific rule setup.
+```
 2. Installation of Suricata
+```
+installed suricata package from System > Package Manager > Available Packages
+configured endpoint and security interface with inline mode.
+updated rule sets.
+configured passlist.
+```
 3. Installation of Splunk server
+```
+download splunk enterprice community version from https://www.splunk.com/en_us/download.html
+installed splunk by activating installer on splunk server.
+confirmed installation by nevigating through splunk dashboard.
+configured local domain in pfsense as splunk.local pointing to machine's static ip.
+```
 4. Installation of WAZUH server
-5. Installation of Splunk universal forwarder and WAZUH agent on endpoints
+```
+followed step by step installation from https://documentation.wazuh.com/current/installation-guide/wazuh-indexer/step-by-step.html for all three components including indexer, manager, and dashboard.
+confirmed installation by accessing dashboard on analyst's machine(splunk server).
+configured local domain name in pfsense as wazuh.local pointing to machin's static ip.
+```
+5. Installation and integration of Splunk universal forwarder on endpoint and pfsense machine for suricata logs  
+5.1 Installation and integration of Splunk universal forwarder on endpoint
+```
+downloaded splunk universal forwarder on endpoint and setted up with destination splunk server's ip on 8089 port.
+allowed port 8089 on firewall and splunk machine's firewall to receive logs.
+```
+5.2 Installation and integration of Splunk universal forwarder on pfsense machine
+```
+downloaded splunk universal forwarder and splunk ta for suricata as .txz file on pfsense's machine. unzip both file in root, move ta-suricata in "opt/splunkforwarder/etc/apps"
+added outputs.conf in /opt/splunkforwarder/etc/system/local with following contents
 
-## Integration process
+"[tcpout]
+defaultGroup=my_indexers
+[tcpout:my_indexers]
+server=192.168.99.2:9997" (allowed this port on splunk machine's firewall)
 
-1. Sending Suricata logs to Splunk server
-2. Sending pfsense logs to Splunk server
-3. Sending endpoint logs to Splunk server
-4. Sending endpoint and Splunk machine logs in WAZUH server
+updated inputs.conf with following content
 
-** Please check back later for further progress. Currently working on documentation, while continuing integrating other tools.
+"[monitor:///var/log/suricata/suricata_vtnet12947/eve.json]
+sourcetype = suricata
+index = suricata
+host = pfSense.homenet.fgh"
+
+finally started splunk forwarder with splunk enable boot-start command from bin folder.
+allowed port 9997 on firewall and splunk machine's firewall to receive logs.
+```
+5.3 configuring splunk server for receiving and parsing logs for each forwarder, and pfsense firewall
+```
+defined new index for endpoint's log, suricata's log, and pfsense logs with names endpoint_0x01, firewall_pfsense, and suricata respectively.
+setted up index storage size limitation, integrity checks per index data, etc.
+configured listening port 9997 on splunk server to receive logs from endpoint, and suricata and data input through standard add data forward method for endpoint
+installed TA-suracata app from splunk base for better parsing suricata logs.
+configured port 5147 for receiving pfsense's syslogs.
+```
+6. installation and integration of wazuh agent on endpoint and  splunk server's machine
+```
+downloaded wazuh installer from "https://packages.wazuh.com/4.x/windows/wazuh-agent-4.12.0-1.msi" and installed it by providing wazuh server's ip 192.168.99.3.
+allowed port 1514, 1515 on firewall and server to receive logs.
+```
+8. settingup project in jira
+```
+created new project named "socsecurityalerts".
+added 3 column in sprint named new alert, alert in progress, alert closed.
+```
+
+## automating ip reputation check through AbuseIPDB, blocking malicious ip, and notifying on slack upon every unique ip connect while also looking for calls to previously known malicious ip by the network in realtime.
+
+### mindmap
+
+### alerts for ip blocking in splunk
+
+### script for blocking ip efficiently vie direct ssh from splunk to pfsense.
+
+### firewall configuration for blocking dynamic list of ip
+
+### shuffle workflow for automated message in slack with additional reputation check on virustotal.
+
+### timeline of alerts and messages.
 
 
-    
