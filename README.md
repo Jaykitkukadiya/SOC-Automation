@@ -19,8 +19,7 @@
 ```
 
 ## network map
-
-![Network diagram example](https://github.com/user-attachments/assets/3527821c-9026-4b7f-a4d2-7839e8e71f26)
+![Network diagram example](https://github.com/user-attachments/assets/37a44f28-e2f3-4678-b619-c49e4d735dcd)
 
 ## Machines in the home lab
   ### FreeBSD
@@ -168,7 +167,8 @@ added 3 column in sprint named new alert, alert in progress, alert closed.
 
 ## automating ip reputation check through AbuseIPDB, blocking malicious ip, and notifying on slack upon every unique ip connect while also looking for calls to previously known malicious ip by the network in realtime.
 
-### mindmap
+### workflow
+![Blank diagram](https://github.com/user-attachments/assets/a665fbb2-0852-4d58-bc7c-61a8643f2b97)
 
 ### alerts for ip blocking in splunk
 
