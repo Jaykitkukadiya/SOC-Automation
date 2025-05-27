@@ -159,7 +159,7 @@ configured port 5147 for receiving pfsense's syslogs.
 downloaded wazuh installer from "https://packages.wazuh.com/4.x/windows/wazuh-agent-4.12.0-1.msi" and installed it by providing wazuh server's ip 192.168.99.3.
 allowed port 1514, 1515 on firewall and server to receive logs.
 ```
-8. settingup project in jira
+7. settingup project in jira
 ```
 created new project named "socsecurityalerts".
 added 3 column in sprint named new alert, alert in progress, alert closed.
@@ -171,12 +171,137 @@ added 3 column in sprint named new alert, alert in progress, alert closed.
 ![Blank diagram](https://github.com/user-attachments/assets/a665fbb2-0852-4d58-bc7c-61a8643f2b97)
 
 ### alerts for ip blocking in splunk
-
+Previously unknown malicious ip detector alert
+```
+index="firewall_pfsense" sourcetype=pfsense:filterlog
+[ search index="firewall_pfsense" sourcetype=pfsense:filterlog
+| stats values(dest_ip) as dest_ip
+| mvexpand dest_ip
+| regex dest_ip="^\d{1,3}(\.\d{1,3}){3}$"
+| dedup dest_ip
+| lookup abuseipdbs dest_ip OUTPUTNEW abuseConfidenceScore, last_checked
+| where isnull(abuseConfidenceScore)
+| eval last_checked=strftime(now(), "%F %T")
+| abuseipdbcheck ip=dest_ip
+| table dest_ip, abuseConfidenceScore, last_checked
+| outputlookup append=true abuseipdbs
+| where abuseConfidenceScore>50
+| fields dest_ip
+| format
+] | lookup abuseipdbs dest_ip OUTPUTNEW abuseConfidenceScore, last_checked
+| sort -_time
+| dedup dest_ip  
+| table _time src_ip dest_ip dest_port action abuseConfidenceScore *
+```
+> scheduled to run every 1 minute.  
+> calls webhook for slack message, runs ip_block.py to block ip in firewall.
+previously known malicious ip detector alert
+```
+index=firewall_pfsense sourcetype=pfsense:filterlog
+[
+  search index=firewall_pfsense sourcetype=pfsense:filterlog
+  | stats values(dest_ip) as dest_ip
+  | mvexpand dest_ip
+  | regex dest_ip="^\d{1,3}(\.\d{1,3}){3}$"
+  | dedup dest_ip
+  | lookup abuseipdbs dest_ip OUTPUTNEW abuseConfidenceScore, last_checked
+  | where isnotnull(abuseConfidenceScore)
+  | where abuseConfidenceScore > 50
+  | fields dest_ip
+  | format
+] 
+| lookup abuseipdbs dest_ip OUTPUTNEW abuseConfidenceScore, last_checked
+| table _time src_ip dest_ip dest_port action abuseConfidenceScore *
+```
+> scheduled in realtime mode.    
+> calls webhook for slack message.  
 ### script for blocking ip efficiently vie direct ssh from splunk to pfsense.
 
+```
+import sys
+import json
+import subprocess
+from datetime import datetime
+
+LOG_FILE = "C:/Program Files/Splunk/var/log/splunk/block_ip_splunk.log"
+
+def log(message):
+    with open(LOG_FILE, "a") as f:
+        f.write(f"{datetime.now()} | {message}\n")
+
+try:
+    payload = sys.stdin.read() # takes input from splunk
+    log(f"Input: {repr(payload)}")
+    
+    # format and retrive destination ip
+    results = json.loads(payload)
+    result = results.get("result", {})
+    ip = result.get("dest_ip")
+
+    # validation
+    if not ip:
+        log("No dest_ip found in payload.")
+        sys.exit(1)
+
+    # add ip in table
+    cmd = 'ssh -i \"C:\\ssh\\pfsense_key\" admin@192.168.99.1 pfctl -t \'splunk_blocklist\' -T add ' + ip
+    
+    # add ip in txt file in firewall for persistence.
+    cmd1 = 'ssh -i \"C:\\ssh\\pfsense_key\" admin@192.168.99.1 \"echo \'' + ip + '\' >> \/root\/splunk_blocklist.txt\"'
+
+    # kill all active connection's stat on firewall.
+    cmd2 = 'ssh -i \"C:\\ssh\\pfsense_key\" admin@192.168.99.1 pfctl -k 0.0.0.0/0 -k ' + ip 
+
+    log(f"Running: {cmd}")
+    log(f"running: {cmd1}")
+    log(f"running: {cmd2}")
+    try:
+        # execution of commands
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        result1 = subprocess.run(
+            cmd1,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        result2 = subprocess.run(
+            cmd2,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        log(f"Command return code: {result.returncode}")
+        log(f"Command return code: {result1.returncode}")
+        log(f"Command return code: {result2.returncode}")
+
+        # result validation
+        if result.returncode == 0:
+            log(f"Successfully blocked: {ip}")
+        else:
+            log(f"there is an error while blocking {ip}: return code {result.returncode}")
+
+    except subprocess.TimeoutExpired:
+        log(f"Oops: SSH command timed out for {ip}")
+
+except Exception as e:
+    log(f"Exception: {str(e)}")
+```
 ### firewall configuration for blocking dynamic list of ip
+Create alias on firewall with "splunk_blocklist" name with type hosts.
+add firewall rules on all 3 interface to block these list of ips comming toward firewall from any direction and not allow to pass on any port, and protocol
+
+> WAN interface : ipv4 protocol:* source:splunk_blocklist port:* destination: WAN address port *    
+> Endpoint interface : ipv4 protocol:* source:endpoint_sunbent port:* destination:splunk_blocklist port *    
+> Security interface : ipv4 protocol:* source:security_sunbent port:* destination:splunk_blocklist port *    
 
 ### shuffle workflow for automated message in slack with additional reputation check on virustotal.
+<img width="1061" alt="image" src="https://github.com/user-attachments/assets/f8e7c0b9-a9eb-4a5b-b1ac-fd4ca5f4c3ea" />
+
 
 ### timeline of alerts and messages.
 
