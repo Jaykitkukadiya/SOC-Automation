@@ -301,8 +301,6 @@ add firewall rules on all 3 interface to block these list of ips comming toward 
 
 ### shuffle workflow for automated message in slack with additional reputation check on virustotal.
 <img width="1061" alt="image" src="https://github.com/user-attachments/assets/f8e7c0b9-a9eb-4a5b-b1ac-fd4ca5f4c3ea" />
-
-
-### timeline of alerts and messages.
-
+slack messages:
+<img width="1800" alt="image" src="https://github.com/user-attachments/assets/fa3135b4-f6ff-4dae-a761-48815bc94505" />
 
