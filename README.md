@@ -304,3 +304,89 @@ add firewall rules on all 3 interface to block these list of ips comming toward 
 slack messages:
 <img width="1800" alt="image" src="https://github.com/user-attachments/assets/fa3135b4-f6ff-4dae-a761-48815bc94505" />
 
+## wazuh automation for malicious file detection with virustotal integration, automated active response to remove malicious file, and notify on slack and email.
+
+### workflow diagram for automated wazuh detection, maliciousness check, active response, and notifications
+![wazuh automation](https://github.com/user-attachments/assets/f4e4f4a2-0400-4920-9987-ea45aa2b7e44)
+
+### configure active monitoring destination folder.
+wazuh's file integrity module is comes in picture when we wants to actively monitor the directory's changes either in realtime or periodically.
+To add my custom monitoring directory I did following.
+> added ``` <directories check_all="yes" realtime="yes">C:\Users\jaykit\Downloads</directories> ``` under ``` <syscheck> ``` tag in ``` ossec.conf ``` file in server and endpoint to look for any changes in this directory
+
+and then restart both wazuh agent and manager to reload the configuration  
+
+### integration of virustotal on wazuh.
+added following code in the ossec.conf on server to configure it to integrate virustotal service on wazuh, makes hash check api call on virustotal with following api key to fetch the report.
+```
+  <integration>
+    <name>virustotal</name>
+    <api_key>055a**************************************************818e9</api_key>
+    <group>syscheck</group>
+    <alert_format>json</alert_format>
+  </integration>
+```
+The virustotal rules on wazuh actively looks for the api response and triggers an alert upon found malicious or not. 
+<img width="1512" alt="Screenshot 2025-05-29 at 7 53 59 PM" src="https://github.com/user-attachments/assets/3af80f95-0be7-42b2-8237-17dec8cf7be2" />
+
+### configuring active response upon virustotal malicious file report.
+upon confirmation of alert is triggering upon malicious file present in the directory. the following thig will be remove it from that directory automatically. 
+for that, i am using custom statless active response script that will be run on the endpoint to delete malicious file.
+first add following this in ``` ossec.conf ``` file on server
+
+```
+<command>
+  <name>rm-th-ar</name>
+  <executable>rmth.bat</executable>
+  <timeout_allowed>no</timeout_allowed>
+</command>
+
+<active-response>
+  <disabled>no</disabled>
+  <command>rm-th-ar</command>
+  <location>local</location>
+  <rules_id>87105</rules_id>
+</active-response>
+
+```
+this configuration ensures that the response command will only be initiated when the rule with id 87105 (virus total malicious file detected) is triggered. location confirms it running on endpoint's local machine.
+
+once the alert triggered, it will execute the ``` rmth.bat ``` a custom batch script on endpoint machine with input provided over stdin chennal.
+```
+@echo off
+setlocal enabledelayedexpansion
+
+set "INPUT_FILE=C:/stdin_input1SS.json"
+set "EXTRACTED_PATH=C:/file_path.txt"
+set "LOG_FILE=C:/rmth.log"
+
+more > "%INPUT_FILE%"
+
+echo Active response started > "%LOG_FILE%"
+
+powershell -NoProfile -Command "try { ($p = Get-Content -Raw '%INPUT_FILE%' | ConvertFrom-Json).parameters.alert.data.virustotal.source.file } catch { '' }" > "%EXTRACTED_PATH%"
+
+set "FILE_PATH="
+for /f "usebackq delims=" %%A in ("%EXTRACTED_PATH%") do (
+    set "FILE_PATH=%%A"
+)
+
+echo Extracted path: !FILE_PATH! >> "%LOG_FILE%"
+
+if exist "!FILE_PATH!" (
+    del /f /q "!FILE_PATH!" >nul 2>&1
+    echo Deleted file: !FILE_PATH! >> "%LOG_FILE%"
+) else (
+    echo File not found or empty path >> "%LOG_FILE%"
+)
+
+endlocal
+exit /b 0
+
+```
+and the sample output that is provided to this script will be 
+```
+{"version":1,"origin":{"name":"node01","module":"wazuh-execd"},"command":"add","parameters":{"extra_args":[],"alert":{"timestamp":"2025-05-29T21:37:32.128+0000","rule":{"level":12,"description":"VirusTotal: Alert - c:\\users\\jaykit\\downloads\\asdf.txt - 64 engines detected this file","id":"87105","mitre":{"id":["T1203"],"tactic":["Execution"],"technique":["Exploitation for Client Execution"]},"firedtimes":1,"mail":true,"groups":["virustotal"],"pci_dss":["10.6.1","11.4"],"gdpr":["IV_35.7.d"]},"agent":{"id":"003","name":"ENDPOINT-Jaykit","ip":"192.168.101.10"},"manager":{"name":"wazuh"},"id":"1748554652.31442705","decoder":{"name":"json"},"data":{"virustotal":{"found":"1","malicious":"1","source":{"alert_id":"1748554644.31441457","file":"c:\\users\\jaykit\\downloads\\asdf.txt","md5":"44d88612fea8a8f36de82e1278abb02f","sha1":"3395856ce81f2b7382dee72602f798b642f14140"},"sha1":"3395856ce81f2b7382dee72602f798b642f14140","scan_date":"2025-05-29 21:26:57","positives":"64","total":"68","permalink":"https://www.virustotal.com/gui/file/275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f/detection/f-275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f-1748554017"},"integration":"virustotal"},"location":"virustotal"},"program":"active-response/bin/rmth.bat"}}
+```
+
+### configuring shuffle workflow and webhook integration on wazuh.
