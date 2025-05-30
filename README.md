@@ -407,7 +407,8 @@ to integrate shuffle shuffle to send slack message upon detection, wazuh needs t
 this ensures that the webhook only calls when alert with rule id 87105 called.
 
 #### shuffle workflow diagram
-<img width="1008" alt="Screenshot 2025-05-29 at 10 47 30 PM" src="https://github.com/user-attachments/assets/ee8d128d-3529-4b61-99e2-379c4b8ad22f" />
+<img width="1081" alt="image" src="https://github.com/user-attachments/assets/2a02ecea-ed56-424e-acae-a47499cd5658" />
+
 
 #### gmail configuration
 To send email, It required to authenticate. for this, i used client id and secret generated from ```https://console.cloud.google.com/``` with limited scope and requester domain, and authenticate sender's email.
