@@ -1,8 +1,7 @@
-# Setting up SOC home lab
+# SOC Home lab with automated response capability for malware, and malicious IP connect
 
 ## Goal of this project 
-  Building a SOC home lab with various tools which I will further use in detonating malware and analysing the traffic for greater visibility through next projects. 
-  Gaining hands-on experience through setting up all these tools, and integrating them together. 
+  Building Soc lab with various tools, gain hands on experience by setting up each tools, integrating them togather. automating malware detection and response, automating detection and response for malicious ip cnnnection.
   
 ## Tech stack
 ```
@@ -16,6 +15,7 @@
   jira - Case Management tool  
   MISP - Malware Information Sharing Platform  
   Slack - Notifications
+  Gmail - email notification
 ```
 
 ## network map
