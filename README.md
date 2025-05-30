@@ -386,7 +386,222 @@ exit /b 0
 ```
 and the sample output that is provided to this script will be 
 ```
-{"version":1,"origin":{"name":"node01","module":"wazuh-execd"},"command":"add","parameters":{"extra_args":[],"alert":{"timestamp":"2025-05-29T21:37:32.128+0000","rule":{"level":12,"description":"VirusTotal: Alert - c:\\users\\jaykit\\downloads\\asdf.txt - 64 engines detected this file","id":"87105","mitre":{"id":["T1203"],"tactic":["Execution"],"technique":["Exploitation for Client Execution"]},"firedtimes":1,"mail":true,"groups":["virustotal"],"pci_dss":["10.6.1","11.4"],"gdpr":["IV_35.7.d"]},"agent":{"id":"003","name":"ENDPOINT-Jaykit","ip":"192.168.101.10"},"manager":{"name":"wazuh"},"id":"1748554652.31442705","decoder":{"name":"json"},"data":{"virustotal":{"found":"1","malicious":"1","source":{"alert_id":"1748554644.31441457","file":"c:\\users\\jaykit\\downloads\\asdf.txt","md5":"44d88612fea8a8f36de82e1278abb02f","sha1":"3395856ce81f2b7382dee72602f798b642f14140"},"sha1":"3395856ce81f2b7382dee72602f798b642f14140","scan_date":"2025-05-29 21:26:57","positives":"64","total":"68","permalink":"https://www.virustotal.com/gui/file/275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f/detection/f-275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f-1748554017"},"integration":"virustotal"},"location":"virustotal"},"program":"active-response/bin/rmth.bat"}}
+{"version":1,"origin":{"name":"node01","module":"wazuh-execd"},"command":"add","parameters":{"extra_args":[],"alert":{"timestamp":"2025-05-29T21:37:32.128+0000",
+"rule":{"level":12,"description":"VirusTotal: Alert - c:\\users\\jaykit\\downloads\\asdf.txt - 64 engines detected this file","id":"87105","mitre":{"id":["T1203"],"tactic":["Execution"],"technique":["Exploitation for Client Execution"]},"firedtimes":1,"mail":true,"groups":["virustotal"],"pci_dss":["10.6.1","11.4"],"gdpr":["IV_35.7.d"]},"agent":{"id":"003","name":"ENDPOINT-Jaykit","ip":"192.168.101.10"},"manager":{"name":"wazuh"},"id":"1748554652.31442705","decoder":{"name":"json"},
+ "data":{"virustotal":{"found":"1","malicious":"1","source":{"alert_id":"1748554644.31441457","file":"c:\\users\\jaykit\\downloads\\asdf.txt",
+"md5":"44d88612fea8a8f36de82e1278abb02f","sha1":"3395856ce81f2b7382dee72602f798b642f14140"},"sha1":"3395856ce81f2b7382dee72602f798b642f14140","scan_date":"2025-05-29 21:26:57","positives":"64","total":"68","permalink":"https://www.virustotal.com/gui/file/275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f/detection/f-275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f-1748554017"},"integration":"virustotal"},"location":"virustotal"},"program":"active-response/bin/rmth.bat"}}
 ```
+ * i used batch file for this execution, but we can use python, java, exe, msi, sh, or any other file
 
 ### configuring shuffle workflow and webhook integration on wazuh.
+
+to integrate shuffle shuffle to send slack message upon detection, wazuh needs to call a webhook, for that i added following in the ``` ossec.conf ```.
+```
+  <integration>
+    <name>shuffle</name>
+    <hook_url>https://shuffler.io/api/v1/hooks/webhook_a9ab55d8-7784-4dd8-944e-405df7c9331c</hook_url>
+    <rule_id>87105</rule_id>
+    <alert_format>json</alert_format>
+  </integration>
+```
+this ensures that the webhook only calls when alert with rule id 87105 called.
+
+#### shuffle workflow diagram
+<img width="1008" alt="Screenshot 2025-05-29 at 10 47 30 PM" src="https://github.com/user-attachments/assets/ee8d128d-3529-4b61-99e2-379c4b8ad22f" />
+
+#### gmail configuration
+To send email, It required to authenticate. for this, i used client id and secret generated from ```https://console.cloud.google.com/``` with limited scope and requester domain, and authenticate sender's email.
+
+##### email message body
+```
+FROM: jaykitkukadiya0@gmail.com
+TO: mr.jaykit@gmail.com
+subject: $exec.pretext: $exec.title
+
+ Pretext: $exec.pretext
+Severity: $exec.severity
+Title: $exec.title
+Rule ID: $exec.rule_id
+Timestamp: $exec.timestamp
+Event ID: $exec.id
+
+——— Rule Details ———
+
+Level: $exec.all_fields.rule.level
+Description: $exec.all_fields.rule.description
+Rule ID: $exec.all_fields.rule.id
+Fired Times: $exec.all_fields.rule.firedtimes
+
+--- Agent Details ---
+Agent ID: $exec.all_fields.agent.id
+Agent Name: $exec.all_fields.agent.name
+Agent IP: $exec.all_fields.agent.ip
+Manager: $exec.all_fields.manager.name
+Decoder: $exec.all_fields.decoder.name
+
+--- VirusTotal Data ---
+Found: $exec.all_fields.data.virustotal.found
+Malicious: $exec.all_fields.data.virustotal.malicious
+Source Alert ID: $exec.all_fields.data.virustotal.source.alert_id
+Source File: $exec.all_fields.data.virustotal.source.file
+MD5: $exec.all_fields.data.virustotal.source.md5
+SHA1: $exec.all_fields.data.virustotal.source.sha1
+Scan Date: $exec.all_fields.data.virustotal.scan_date
+Positives: $exec.all_fields.data.virustotal.positives
+Total Engines: $exec.all_fields.data.virustotal.total
+Permalink: $exec.all_fields.data.virustotal.permalink
+
+Integration: $exec.all_fields.data.integration
+Location: $exec.all_fields.location
+```
+above body message will than converted to base64 and than it will be added as value of key "raw" in gmail app's body.
+
+##### Final email
+<img width="1209" alt="image" src="https://github.com/user-attachments/assets/0ea79c93-0a64-49b0-9486-4a2aa5d63c69" />
+
+#### slack configuration
+To send the message in slack, I have created ```malicious-file-detection-response``` channel, add an soclab app in the channel, and retrive channel ID.
+
+added following text in body to generate the message
+```
+{
+  "channel": "C08U8CMHNMV",
+  "username": "Wazuh",
+  "icon_emoji": ":rotating_light:",
+  "text": "🚨 WAZUH Alert – VirusTotal Detection",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "🚨 WAZUH Alert"
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Pretext:*\n$exec.pretext"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Severity:*\n$exec.severity"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Title:*\nVirusTotal: Alert - $path_replacer.message - $exec.all_fields.data.virustotal.positives engines detected this file."
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Rule ID:*\n$exec.rule_id"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Timestamp:*\n$exec.timestamp"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Event ID:*\n$exec.id"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Level:*\n$exec.all_fields.rule.level"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Description:*\nVirusTotal: Alert - $path_replacer.message - $exec.all_fields.data.virustotal.positives engines detected this file."
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Rule ID:*\n$exec.all_fields.rule.id"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Fired Times:*\n$exec.all_fields.rule.firedtimes"
+        },
+      ]
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Agent:*\n$exec.all_fields.agent.name (`$exec.all_fields.agent.id`)"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*IP:*\n$exec.all_fields.agent.ip"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Manager:*\n$exec.all_fields.manager.name"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Decoder:*\n$exec.all_fields.decoder.name"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Found:*\n$exec.all_fields.data.virustotal.found"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Malicious:*\n$exec.all_fields.data.virustotal.malicious"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Positives:*\n$exec.all_fields.data.virustotal.positives"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Total Engines:*\n$exec.all_fields.data.virustotal.total"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*File:*\n$path_replacer.message"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Scan Date:*\n$exec.all_fields.data.virustotal.scan_date"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*MD5:*\n$exec.all_fields.data.virustotal.source.md5"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*SHA1:*\n$exec.all_fields.data.virustotal.source.sha1"
+        }
+      ]
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": ":link: <$exec.all_fields.data.virustotal.permalink|View on VirusTotal>"
+        }
+      ]
+    }
+  ]
+}
+
+```
+ * i used python script in the middle to replace \ with \\ to avoid misconfiguration.
+   
+##### Final slack message
+<img width="1512" alt="image" src="https://github.com/user-attachments/assets/8b79e794-dc3e-40fa-88bc-d531806a7748" />
+
+
+
